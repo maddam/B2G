@@ -58,7 +58,10 @@ case "$1" in
 	echo DEVICE=maguro >> .tmp-config &&
 	repo_sync $1
 	;;
-
+"nexus 7")
+	echo DEVICE=grouper >> .tmp-config &&
+	repo_sync $1
+	;;
 "optimus-l5")
 	echo DEVICE=m4 >> .tmp-config &&
 	repo_sync $1
