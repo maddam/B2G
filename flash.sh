@@ -6,6 +6,7 @@ ADB=${ADB:-adb}
 FASTBOOT=${FASTBOOT:-fastboot}
 HEIMDALL=${HEIMDALL:-heimdall}
 VARIANT=${VARIANT:-eng}
+FULLFLASH=false
 
 if [ ! -f "`which \"$ADB\"`" ]; then
 	ADB=out/host/`uname -s | tr "[[:upper:]]" "[[:lower:]]"`-x86/bin/adb
@@ -66,7 +67,14 @@ fastboot_flash_image()
 
 flash_fastboot()
 {
-	run_adb reboot bootloader ;
+	case $DEVICE in
+	"helix")
+		run_adb reboot oem-1
+		;;
+	*)
+		run_adb reboot bootloader
+		;;
+	esac
 	run_fastboot devices &&
 	( [ "$1" = "nounlock" ] || run_fastboot oem unlock || true )
 
@@ -81,8 +89,18 @@ flash_fastboot()
 		;;
 
 	*)
-		run_fastboot erase cache &&
-		run_fastboot erase userdata &&
+		# helix doesn't support erase command in fastboot mode.
+		VERB="erase"
+		if [ "$DEVICE" == "mako" ] || [ "$DEVICE" == "flo" ]; then
+			VERB="format"
+		fi
+		if [ "$DEVICE" != "helix" ]; then
+			run_fastboot $VERB cache &&
+			run_fastboot $VERB userdata
+			if [ $? -ne 0 ]; then
+				return $?
+			fi
+		fi
 		fastboot_flash_image userdata &&
 		([ ! -e out/target/product/$DEVICE/boot.img ] ||
 		fastboot_flash_image boot) &&
@@ -178,6 +196,33 @@ delete_extra_gecko_files_on_device()
 	return 0
 }
 
+flash_gecko()
+{
+	delete_extra_gecko_files_on_device &&
+	run_adb push $GECKO_OBJDIR/dist/b2g /system/b2g &&
+	return 0
+}
+
+flash_gaia()
+{
+	GAIA_MAKE_FLAGS="ADB=\"$ADB\""
+	USER_VARIANTS="user(debug)?"
+	if [[ "$VARIANT" =~ $USER_VARIANTS ]]; then
+		# Gaia's build takes care of remounting /system for production builds
+		GAIA_MAKE_FLAGS+=" PRODUCTION=1"
+	fi
+	adb wait-for-device
+	if adb shell cat /data/local/webapps/webapps.json | grep -qs '"basePath": "/system' ; then
+		echo -n "In ${bold}production${offbold} mode"
+		export B2G_SYSTEM_APPS=1
+		adb remount
+	else
+		echo -n "In ${bold}dev${offbold} mode"
+	fi 
+	make -C gaia install-gaia $GAIA_MAKE_FLAGS
+	return 0
+}
+
 while [ $# -gt 0 ]; do
 	case "$1" in
 	"-s")
@@ -185,7 +230,11 @@ while [ $# -gt 0 ]; do
 		FASTBOOT_FLAGS+="-s $2"
 		shift
 		;;
+	"-f")
+		FULLFLASH=true
+		;;
 	*)
+		FULLFLASH=true
 		PROJECT=$1
 		;;
 	esac
@@ -194,25 +243,16 @@ done
 
 case "$PROJECT" in
 "gecko")
-	run_adb remount &&
-	delete_extra_gecko_files_on_device &&
-	run_adb push $GECKO_OBJDIR/dist/b2g /system/b2g &&
-	echo Restarting B2G &&
 	run_adb shell stop b2g &&
+	run_adb remount &&
+	flash_gecko &&
+	echo Restarting B2G &&
 	run_adb shell start b2g
 	exit $?
 	;;
 
 "gaia")
-	GAIA_MAKE_FLAGS="ADB=\"$ADB\""
-	USER_VARIANTS="user(debug)?"
-	if [[ "$VARIANT" =~ $USER_VARIANTS ]]; then
-		# Gaia's build takes care of remounting /system for production builds
-		GAIA_MAKE_FLAGS+=" PRODUCTION=1"
-	fi
-
-	make -C gaia install-gaia $GAIA_MAKE_FLAGS
-	make -C gaia install-media-samples $GAIA_MAKE_FLAGS
+	flash_gaia
 	exit $?
 	;;
 
@@ -223,23 +263,28 @@ case "$PROJECT" in
 esac
 
 case "$DEVICE" in
-"otoro"|"unagi")
+"leo"|"hamachi"|"helix")
+	if $FULLFLASH; then
+		flash_fastboot nounlock $PROJECT
+		exit $?
+	else
+		run_adb root &&
+		run_adb shell stop b2g &&
+		run_adb remount &&
+		flash_gecko &&
+		flash_gaia &&
+		update_time &&
+		echo Restarting B2G &&
+		run_adb shell start b2g
+	fi
+	exit $?
+	;;
+
+"otoro"|"unagi"|"keon"|"peak"|"inari"|"sp8810ea"|"wasabi")
 	flash_fastboot nounlock $PROJECT
 	;;
 
-"panda")
-	flash_fastboot unlock $PROJECT
-	;;
-
-"maguro")
-	flash_fastboot unlock $PROJECT
-	;;
-
-"m4")
-	flash_fastboot unlock $PROJECT
-	;;
-
-"crespo"|"crespo4g")
+"panda"|"maguro"|"m4"|"crespo"|"crespo4g"|"mako"|"flo")
 	flash_fastboot unlock $PROJECT
 	;;
 

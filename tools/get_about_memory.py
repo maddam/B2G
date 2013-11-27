@@ -6,6 +6,9 @@ You can then view these dumps using a recent Firefox nightly on your desktop by
 opening about:memory and using the button at the bottom of the page to load the
 memory-reports file that this script creates.
 
+By default this script also gets gc/cc logs from all B2G processes.  This takes
+a while, and these logs are large, so you can turn it off if you like.
+
 This script also saves the output of b2g-procrank and a few other diagnostic
 programs.  If you compiled with DMD and have it enabled, we'll also pull the
 DMD reports.
@@ -36,7 +39,7 @@ import fix_b2g_stack
 
 def process_dmd_files(dmd_files, args):
     '''Run fix_b2g_stack.py on each of these files.'''
-    if not dmd_files:
+    if not dmd_files or args.no_dmd:
         return
 
     print()
@@ -146,13 +149,15 @@ def get_dumps(args):
         out_dir = utils.create_specific_output_dir(args.output_directory)
     else:
         out_dir = utils.create_new_output_dir('about-memory-')
+    args.output_directory = out_dir
 
     # Do this function inside a try/catch which will delete out_dir if the
     # function throws and out_dir is empty.
     def do_work():
-        signal = 'SIGRT0' if not args.minimize_memory_usage else 'SIGRT1'
-        new_files = utils.send_signal_and_pull_files(
-            signal=signal,
+        fifo_msg = 'memory report' if not args.minimize_memory_usage else \
+                   'minimize memory report'
+        new_files = utils.notify_and_pull_files(
+            fifo_msg=fifo_msg,
             outfiles_prefixes=['memory-report-'],
             remove_outfiles_from_device=not args.leave_on_device,
             out_dir=out_dir,
@@ -167,14 +172,16 @@ def get_dumps(args):
             for f in memory_report_files:
                 os.remove(os.path.join(out_dir, f))
 
-        return (os.path.abspath(merged_reports_path),
+        return (out_dir,
+                os.path.abspath(merged_reports_path),
                 [os.path.join(out_dir, f) for f in dmd_files])
 
     return utils.run_and_delete_dir_on_exception(do_work, out_dir)
 
-def get_and_show_dump(args):
-    (merged_reports_path, dmd_files) = get_dumps(args)
-    if dmd_files:
+def get_and_show_info(args):
+    (out_dir, merged_reports_path, dmd_files) = get_dumps(args)
+
+    if dmd_files and not args.no_dmd:
         print('Got %d DMD dump(s).' % len(dmd_files))
 
     # Try to open the dump in Firefox.
@@ -214,6 +221,13 @@ def get_and_show_dump(args):
             following URL:
             ''')) + '\n\n  ' + about_memory_url)
 
+    # Get GC/CC logs if necessary.
+    if args.get_gc_cc_logs:
+        import get_gc_cc_log
+        print('')
+        print('Pulling GC/CC logs...')
+        get_gc_cc_log.get_logs(args, out_dir=out_dir, get_procrank_etc=False)
+
     process_dmd_files(dmd_files, args)
 
 if __name__ == '__main__':
@@ -248,6 +262,23 @@ if __name__ == '__main__':
             the memory-reports file.  You shouldn't need to pass this parameter
             except for debugging.'''))
 
+    gc_log_group = parser.add_mutually_exclusive_group()
+
+    gc_log_group.add_argument('--no-gc-cc-log',
+        dest='get_gc_cc_logs',
+        action='store_false',
+        default=True,
+        help="Don't get a gc/cc log.")
+
+    gc_log_group.add_argument('--abbreviated-gc-cc-log',
+        dest='abbreviated_gc_cc_log',
+        action='store_true',
+        default=False,
+        help='Get an abbreviated GC/CC log, instead of a full one.')
+
+    parser.add_argument('--no-dmd', action='store_true', default=False,
+        help='''Don't process DMD logs, even if they're available.''')
+
     dmd_group = parser.add_argument_group('optional DMD args (passed to fix_b2g_stack)',
         textwrap.dedent('''\
             You only need to worry about these options if you're running DMD on
@@ -255,4 +286,4 @@ if __name__ == '__main__':
     fix_b2g_stack.add_argparse_arguments(dmd_group)
 
     args = parser.parse_args()
-    get_and_show_dump(args)
+    get_and_show_info(args)
