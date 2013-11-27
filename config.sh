@@ -80,19 +80,19 @@ case "$1" in
 	echo DEVICE=maguro >> .tmp-config &&
 	repo_sync $1
 	;;
-<<<<<<< HEAD
-"nexus 7")
+
+"nexus-7")
 	echo DEVICE=grouper >> .tmp-config &&
 	repo_sync $1
 	;;
-=======
+
 
 "nexus-4")
 	echo DEVICE=mako >> .tmp-config &&
 	repo_sync nexus-4
 	;;
 
->>>>>>> 4b21a6824f6679535115bd89e17d856107b60d9b
+
 "optimus-l5")
 	echo DEVICE=m4 >> .tmp-config &&
 	repo_sync $1
