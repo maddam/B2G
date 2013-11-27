@@ -4,10 +4,18 @@
 
   <include name="base-jb.xml"/>
 
+
+  <remote name="arancha"
+           fetch="git://github.com/maddam/" />
+
+  <default revision="refs/tags/android-4.2.1_r1"
+   remote="device_grouper"
+   sync-j="4" />
+
   <default remote="caf" revision="refs/tags/android-4.3_r2.1" sync-j="4"/>
 
   <!-- grouper specific things -->
-  <project name="device/asus/grouper" path="device/asus/grouper" remote="b2g" revision="b2g-4.3_r2.1"/>
+  <project name="android_device_asus_grouper" remote= "arancha" path="device/asus/grouper" />
   <project name="device/generic/armv7-a-neon" path="device/generic/armv7-a-neon"/>
   <project name="device/generic/armv7-a" path="device/generic/armv7-a" />
   <project name="device/asus/grouper-kernel" path="device/asus/grouper-kernel" />
