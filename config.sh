@@ -30,7 +30,7 @@ case `uname` in
 	exit -1
 esac
 
-GITREPO=${GITREPO:-"git://github.com/mozilla-b2g/b2g-manifest"}
+GITREPO=${GITREPO:-"git://github.com/maddam/b2g-manifest"}
 BRANCH=${BRANCH:-master}
 
 while [ $# -ge 1 ]; do
@@ -86,6 +86,10 @@ case "$1" in
 	repo_sync $1
 	;;
 
+"grouper")
+	echo DEVICE=grouper >> .tmp-config &&
+	repo_sync $1
+	;;
 
 "nexus-4")
 	echo DEVICE=mako >> .tmp-config &&
